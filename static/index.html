@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MyLife AI</title>
+<style>
+:root{--bg:#f5f5fa;--card:#fff;--ink:#1a1b2e;--mut:#6a6d85;--line:#e0e1ee;--acc:#4f46e5;--bad:#dc2626}
+@media(prefers-color-scheme:dark){:root{--bg:#0f1020;--card:#181a30;--ink:#eceefb;--mut:#9a9eba;--line:#2a2d4a;--acc:#818cf8}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 system-ui,sans-serif}
+main{max-width:760px;margin:0 auto;padding:16px}h1{font-size:21px;margin:4px 0}h2{font-size:16px;margin:0 0 10px}.mut{color:var(--mut);font-size:13px}
+header{display:flex;justify-content:space-between;align-items:center}
+nav{display:flex;gap:6px;overflow-x:auto;padding:8px 0}
+nav button{flex:none;border:1px solid var(--line);background:var(--card);color:var(--ink);padding:8px 12px;border-radius:20px;cursor:pointer}
+nav button.on{background:var(--acc);border-color:var(--acc);color:#fff}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:12px}
+.row{display:flex;gap:8px;flex-wrap:wrap}.row>*{flex:1 1 130px}
+input,select{width:100%;padding:9px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);font:inherit}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+.btn{border:0;background:var(--acc);color:#fff;padding:10px 14px;border-radius:8px;font:inherit;font-weight:600;cursor:pointer}
+.alt{background:transparent;color:var(--ink);border:1px solid var(--line);font-weight:400}.del{background:transparent;color:var(--bad);border:1px solid var(--bad);font-weight:400}
+.x{border:0;background:none;color:var(--mut);cursor:pointer;font-size:18px;flex:0}
+ul{margin:0;padding:0;list-style:none}li{padding:6px 0;border-bottom:1px solid var(--line);font-size:13px;display:flex;justify-content:space-between;gap:8px}
+.chat{max-height:46vh;overflow-y:auto;display:flex;flex-direction:column;gap:8px;margin-bottom:10px}
+.b{padding:9px 12px;border-radius:12px;max-width:88%;white-space:pre-wrap;font-size:14px}.u{align-self:flex-end;background:var(--acc);color:#fff}.a{align-self:flex-start;background:var(--bg);border:1px solid var(--line)}
+.ins{border-left:3px solid var(--acc);padding-left:10px;margin:8px 0}
+.st{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px}.st div{background:var(--bg);border-radius:8px;padding:10px;font-size:13px;color:var(--mut)}.st b{display:block;font-size:20px;color:var(--ink)}
+.bars{display:flex;gap:6px;align-items:flex-end;height:80px}.bars i{flex:1;background:var(--acc);border-radius:4px 4px 0 0}
+.bar{height:8px;background:var(--line);border-radius:5px;overflow:hidden}.bar i{display:block;height:100%;background:var(--acc)}
+</style></head><body><main id="app"></main>
+<script>
+const $=s=>document.querySelector(s),app=$('#app');
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+async function api(p,method='GET',body){const r=await fetch('/api/'+p,{method,headers:{'Content-Type':'application/json'},body:body?JSON.stringify(body):undefined});
+ const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.error||'Something went wrong.');return j}
+const f1=v=>v==null?'-':(+v).toFixed(1);
+let me=null,tab='dash',chat=[],busy=false,msg='';
+async function boot(){try{me=await api('me')}catch(e){me=null}render()}
+function render(){
+ if(!me){app.innerHTML=`<h1>MyLife AI</h1><p class="mut">Your private life assistant.</p><div class="card"><h2>Sign in or create an account</h2><div class="row"><input id="un" placeholder="Username" autocomplete="username"><input id="pw" type="password" placeholder="Password (8+ characters)" autocomplete="current-password"></div><p class="row"><button class="btn" id="in">Sign in</button><button class="btn alt" id="up">Create account</button></p><p class="mut" id="am">${esc(msg)}</p></div>`;
+  const go=p=>async()=>{try{await api(p,'POST',{username:$('#un').value,password:$('#pw').value});msg='';await boot()}catch(e){msg=e.message;render()}};
+  $('#in').onclick=go('login');$('#up').onclick=go('register');return}
+ const tabs=[['dash','Dashboard'],['chat','Chat'],...Object.entries(me.schema).map(([k,m])=>[k,m.name]),['goals','Goals'],['priv','Privacy']];
+ app.innerHTML=`<header><h1>MyLife AI</h1><span class="mut">${esc(me.username)} <button class="btn alt" id="out">Sign out</button></span></header><nav>${tabs.map(([k,n])=>`<button data-t="${k}" class="${tab==k?'on':''}">${n}</button>`).join('')}</nav><div id="v"></div>`;
+ $('#out').onclick=async()=>{await api('logout','POST');me=null;chat=[];render()};
+ document.querySelector('nav').onclick=e=>{if(e.target.dataset.t){tab=e.target.dataset.t;render()}};
+ ({dash,chat:vChat,goals:vGoals,priv:vPriv}[tab]||(()=>tracker(tab)))()}
+const fail=e=>alert(e.message);
+async function tracker(k){const m=me.schema[k],rows=await api('entries/'+k);
+ $('#v').innerHTML=`<div class="card"><h2>Log ${m.name.toLowerCase()}</h2><div class="row">${m.fields.map(f=>`<label class="mut">${f.label}${f.type=='select'?`<select name="${f.name}">${f.options.map(o=>`<option>${o}</option>`).join('')}</select>`:`<input name="${f.name}" type="${f.type}" ${f.type=='number'?'step="any" min="0"':''}>`}</label>`).join('')}</div><p><button class="btn" id="add">Save entry</button></p></div>
+ ${k=='fin'?`<div class="card"><h2>Monthly budget</h2><div class="row"><input id="bud" type="number" min="0" value="${me.budget||''}" placeholder="Budget"><button class="btn alt" id="sb">Set budget</button></div></div>`:''}
+ <div class="card"><h2>History</h2>${rows.length?`<ul>${rows.map(r=>`<li><span>${esc(r.created)}: ${Object.values(r.data).map(esc).join(', ')}</span><button class="x" data-d="${r.id}" aria-label="Delete entry">&times;</button></li>`).join('')}</ul>`:'<p class="mut">No entries yet.</p>'}</div>`;
+ $('#add').onclick=async()=>{const o={};m.fields.forEach(f=>o[f.name]=$(`[name=${f.name}]`).value);try{await api('entries/'+k,'POST',o);render()}catch(e){fail(e)}};
+ if(k=='fin')$('#sb').onclick=async()=>{try{await api('budget','POST',{budget:$('#bud').value});me.budget=+$('#bud').value;render()}catch(e){fail(e)}};
+ $('#v').onclick=async e=>{if(e.target.dataset.d){await api('entries/item/'+e.target.dataset.d,'DELETE');render()}}}
+async function dash(){const {stats:s,insights}=await api('dashboard');
+ $('#v').innerHTML=`<div class="card"><h2>Overview</h2><div class="st"><div>Mood (last 7)<b>${f1(s.mood_avg)}</b></div><div>Sleep (h)<b>${f1(s.sleep_avg)}</b></div><div>Exercise (min)<b>${f1(s.exercise_avg)}</b></div><div>Study hours<b>${f1(s.study_hours)}</b></div><div>Expenses<b>${s.expenses}</b></div><div>Saved<b>${s.saved}</b></div><div>Applications<b>${s.applications}</b></div><div>Goals done<b>${s.goal_avg==null?'-':s.goal_avg+'%'}</b></div></div></div>
+ <div class="card"><h2>Mood trend</h2>${s.mood_trend.length?`<div class="bars">${s.mood_trend.map(v=>`<i style="height:${v*20}%" title="${v}"></i>`).join('')}</div>`:'<p class="mut">Log your mood to see a trend.</p>'}</div>
+ <div class="card"><h2>Insights</h2>${insights.map(i=>`<div class="ins">${esc(i)}</div>`).join('')}</div>`}
+function paint(){const c=$('#cl');if(!c)return;c.innerHTML=chat.length?chat.map(x=>`<div class="b ${x.role=='user'?'u':'a'}">${esc(x.content)}</div>`).join(''):'<p class="mut">Ask about study, career, business, money or daily life. Type "remember: ..." to save a memory.</p>';c.scrollTop=c.scrollHeight}
+function vChat(){$('#v').innerHTML=`<div class="card"><h2>Chat</h2><div class="chat" id="cl" aria-live="polite"></div><div class="row"><input id="ci" placeholder="Message" style="flex:3 1 200px"><button class="btn" id="cs" style="flex:1 1 80px">Send</button></div><p class="mut">Not medical, legal or financial advice. Chat history is not stored.</p></div>`;paint();
+ const go=async()=>{const t=$('#ci').value.trim();if(!t||busy)return;$('#ci').value='';chat.push({role:'user',content:t});busy=true;paint();
+  try{const r=await api('chat','POST',{messages:chat});chat.push({role:'assistant',content:r.reply})}catch(e){chat.push({role:'assistant',content:e.message})}busy=false;paint()};
+ $('#cs').onclick=go;$('#ci').onkeydown=e=>{if(e.key=='Enter')go()}}
+async function vGoals(){const g=await api('goals');
+ $('#v').innerHTML=`<div class="card"><h2>New goal</h2><div class="row"><input id="gt" placeholder="Goal"><select id="gk"><option>short-term</option><option>long-term</option></select></div><p><button class="btn" id="ga">Add goal</button></p></div><div class="card"><h2>Progress</h2>${g.length?g.map(x=>`<div style="margin:12px 0"><div class="row" style="justify-content:space-between"><b>${esc(x.title)}</b><span class="mut">${x.kind} &middot; ${x.progress}%</span></div><div class="bar"><i style="width:${x.progress}%"></i></div><div class="row"><input type="range" min="0" max="100" step="5" value="${x.progress}" data-g="${x.id}" aria-label="Progress"><button class="x" data-gd="${x.id}" aria-label="Delete goal">&times;</button></div></div>`).join(''):'<p class="mut">No goals yet.</p>'}</div>`;
+ $('#ga').onclick=async()=>{try{await api('goals','POST',{title:$('#gt').value,kind:$('#gk').value});render()}catch(e){fail(e)}};
+ $('#v').onchange=async e=>{if(e.target.dataset.g){await api('goals/'+e.target.dataset.g,'PATCH',{progress:+e.target.value});render()}};
+ $('#v').onclick=async e=>{if(e.target.dataset.gd){await api('goals/'+e.target.dataset.gd,'DELETE');render()}}}
+async function vPriv(){const m=await api('memories');
+ $('#v').innerHTML=`<div class="card"><h2>Memories</h2><div class="row"><input id="mi" placeholder="Something you allow me to remember"><button class="btn" id="ma" style="flex:0 0 auto">Remember</button></div>${m.length?`<ul style="margin-top:8px">${m.map(x=>`<li><span>${esc(x.text)}</span><button class="x" data-m="${x.id}" aria-label="Delete memory">&times;</button></li>`).join('')}</ul>`:'<p class="mut">Nothing remembered.</p>'}</div>
+ <div class="card"><h2>Your data</h2><p class="row"><button class="btn alt" id="ex">View my data</button><button class="btn del" id="da">Delete all my data</button><button class="btn del" id="dx">Delete my account</button></p><pre id="o" class="mut" style="white-space:pre-wrap;overflow-x:auto"></pre></div>`;
+ $('#ma').onclick=async()=>{try{await api('memories','POST',{text:$('#mi').value});render()}catch(e){fail(e)}};
+ $('#v').onclick=async e=>{if(e.target.dataset.m){await api('memories/'+e.target.dataset.m,'DELETE');render()}};
+ $('#ex').onclick=async()=>{$('#o').textContent=JSON.stringify(await api('export'),null,1)};
+ $('#da').onclick=async()=>{if(confirm('Delete all entries, goals and memories?')){await api('data','DELETE');render()}};
+ $('#dx').onclick=async()=>{if(confirm('Delete your account and all its data?')){await api('account','DELETE');me=null;render()}}}
+boot();
+</script></body></html>
